@@ -1,0 +1,128 @@
+---
+title: "BJJ Dataset"
+author: "K Culpepper"
+date: "2026-11-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(nnet)
+library(ggplot2)
+install.packages("car")
+library(car)
+```
+
+```{r}
+
+```
+
+## Downloading and Cleaning Data
+
+```{r one}
+my_data <- RKaggle::get_dataset("albucathecoder/adcc-matches")
+my_data$victory_method <- as.factor(my_data$victory_method)
+my_data$weight_class <- as.factor(my_data$weight_class)
+my_data$submission <- as.factor(my_data$submission)
+my_data$submission_target <- as.factor(my_data$submission_target)
+my_data$submission_target <- na_if(my_data$submission_target, "nan")
+my_data$absolute <- as.factor(my_data$absolute)
+my_data$female <- as.factor(my_data$female)
+head(my_data)
+#summary(my_data)
+sapply(my_data, class) 
+#my_data$my_column <- as.factor(my_data$victory_method)
+```
+
+## Finding Missing Values
+
+These are the only columns that had NA values, the submission = submission_target, which is correct, but weight class data should not be missing.
+
+```{r two}
+sum(is.na(my_data$submission))
+sum(is.na(my_data$weight_class))
+sum(is.na(my_data$submission_target))
+
+#now clean df
+df <- my_data[!is.na(my_data$weight_class), ]
+head(df)
+unique(df$victory_method)
+```
+
+```{r}
+#find and remove colinearity
+
+```
+
+## Creating MLM Model
+
+```{r three}
+#use logistic glm b/c categorical and yes/no results
+mlm <- multinom(victory_method ~ winner_points + loser_points + female + year + 
+                absolute + weight_class + importance + total_points, 
+                data = df)
+
+summary(mlm)
+vif(mlm)
+```
+
+```{r}
+z <- summary(mlm)$coefficients / summary(mlm)$standard.errors
+p_values <- (1 - pnorm(abs(z), 0, 1)) * 2
+print(p_values)
+print(z
+```
+
+Weight class,
+
+## Clustering Model
+
+```{r}
+
+kp_model <- kproto(x = df, k = 3, nstart = 10)
+kp_model$center
+kp_model$size
+```
+
+```{r}
+install.packages("clustMixType")
+library(clustMixType)
+```
+
+```{r}
+
+set.seed(123)
+
+# 1. Estimate a fixed lambda for consistent distance scaling across k
+est_lambda <- lambdaest(df, verbose = FALSE)
+
+# 2. Run kproto for k = 1 to 10 and extract tot.withinss
+k_values <- 1:10
+tot_withinss <- sapply(k_values, function(k) {
+  model <- kproto(
+    x = df, 
+    k = k, 
+    lambda = est_lambda, 
+    nstart = 10,      # Multiple random starts prevent local minima
+    verbose = FALSE
+  )
+  model$tot.withinss
+})
+
+# elbow plot
+elbow_df <- data.frame(k = k_values, tot_withinss = tot_withinss)
+
+ggplot(elbow_df, aes(x = k, y = tot_withinss)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_point(color = "steelblue", size = 3) +
+  scale_x_continuous(breaks = k_values) +
+  labs(
+    title = "Elbow Method for k-Prototypes",
+    x = "Number of Clusters (k)",
+    y = "Total Within-Cluster Distance (tot.withinss)"
+  ) +
+  theme_minimal()
+
+```
